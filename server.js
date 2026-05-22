@@ -35,8 +35,8 @@ app.use(session({
   saveUninitialized: false,
   cookie: {
     maxAge: 8 * 60 * 60 * 1000,
-    sameSite: 'lax',
-    secure: !!process.env.PORT
+    sameSite: 'none',
+    secure: true
   }
 }));
 const CONFIG = {
