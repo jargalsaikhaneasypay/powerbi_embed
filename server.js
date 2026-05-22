@@ -49,7 +49,7 @@ const CONFIG = {
   REPORT_ID_3: 'df629503-90e7-4546-8700-2d445e39f673',   // Dashboard 3 (EasypayShts)
 
   USERS: {
-    'Admin':      { password: 'Easypay123',  name: 'Admin',      reports: [1, 2, 3] },
+    'Admin':      { password: 'Easypay321',  name: 'Admin',      reports: [1, 2, 3] },
     'EasypayAll': { password: 'easypay2026', name: 'EasypayAll', reports: [1] },
     'Easypay':    { password: 'Easypay123',  name: 'Easypay',    reports: [2] },
     'EasypayShts':{ password: 'EasypayShts123',  name: 'EasypayShts',    reports: [3] },
