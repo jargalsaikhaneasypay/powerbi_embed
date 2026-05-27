@@ -19,21 +19,7 @@ export default function App() {
         }
       } catch {}
 
-      // 2. If SSO failed (redirected back from callback), show login page
-      const ssoFailed = new URLSearchParams(window.location.search).get('sso_failed');
-      if (ssoFailed) {
-        setAuth({ checked: true, authenticated: false, name: '', allowedReports: [] });
-        return;
-      }
-
-      // 3. If inside an iframe (SharePoint), auto-redirect to Microsoft SSO
-      const inIframe = window.self !== window.top;
-      if (inIframe) {
-        window.location.href = '/api/auth/microsoft';
-        return;
-      }
-
-      // 4. Direct web access — show login page
+      // 2. Show login page
       setAuth({ checked: true, authenticated: false, name: '', allowedReports: [] });
     }
 
