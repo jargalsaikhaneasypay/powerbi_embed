@@ -1,15 +1,19 @@
 const express = require('express');
-const session = require('express-session');
 const axios = require('axios');
 const msal = require('@azure/msal-node');
 const path = require('path');
 const cors = require('cors');
 const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
+const cookieParser = require('cookie-parser');
 
 const app = express();
 app.set('trust proxy', 1); // Required: Render terminates SSL at its proxy
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
+
+const isProduction = !!process.env.PORT;
 
 const ALLOWED_ORIGINS = [
   /^https?:\/\/localhost(:\d+)?$/,
@@ -30,16 +34,6 @@ app.use(cors({
   credentials: true
 }));
 
-app.use(session({
-  secret: 'CHANGE-THIS-TO-A-STRONG-RANDOM-SECRET',
-  resave: false,
-  saveUninitialized: false,
-  cookie: {
-    maxAge: 8 * 60 * 60 * 1000,
-    sameSite: 'none',
-    secure: true
-  }
-}));
 const CONFIG = {
   CLIENT_ID: 'da995cce-e2d6-4064-92bd-a6c90a9da6fd',
   TENANT_ID: 'c7c2eb81-57fd-4e38-bec1-d91a88228111',
@@ -48,6 +42,7 @@ const CONFIG = {
   REPORT_ID_1: '2f3ed948-726c-45f4-9701-f773445e29d4',   // Dashboard 1 (EasypayAll)
   REPORT_ID_2: '59b65d18-7735-4bcc-a4e6-35ce557aeb43',   // Dashboard 2 (Easypay)
   REPORT_ID_3: 'df629503-90e7-4546-8700-2d445e39f673',   // Dashboard 3 (EasypayShts)
+  JWT_SECRET: process.env.JWT_SECRET || 'easypay-jwt-secret-2026',
 
   USERS: {
     'Admin':      { password: 'Easypay321',      name: 'Admin',       reports: [1, 2, 3] },
@@ -117,11 +112,27 @@ async function getEmbedInfo(reportNum) {
 }
 
 // =============================================
-// Auth Middleware
+// JWT Auth Middleware
 // =============================================
 function requireAuth(req, res, next) {
-  if (req.session?.authenticated) return next();
-  return res.status(401).json({ error: 'Not authenticated' });
+  const token = req.cookies?.auth_token;
+  if (!token) return res.status(401).json({ error: 'Not authenticated' });
+  try {
+    req.user = jwt.verify(token, CONFIG.JWT_SECRET);
+    next();
+  } catch {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+}
+
+function setAuthCookie(res, payload) {
+  const token = jwt.sign(payload, CONFIG.JWT_SECRET, { expiresIn: '8h' });
+  res.cookie('auth_token', token, {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: isProduction ? 'none' : 'lax',
+    maxAge: 8 * 60 * 60 * 1000
+  });
 }
 
 // =============================================
@@ -138,10 +149,7 @@ app.post('/api/login', async (req, res) => {
   const valid = isHashed ? await bcrypt.compare(password, user.password) : password === user.password;
 
   if (valid) {
-    req.session.authenticated = true;
-    req.session.username = username;
-    req.session.name = user.name;
-    req.session.allowedReports = user.reports;
+    setAuthCookie(res, { username, name: user.name, allowedReports: user.reports });
     return res.json({ success: true, name: user.name, allowedReports: user.reports });
   }
   return res.status(401).json({ success: false, error: 'Invalid credentials' });
@@ -149,28 +157,28 @@ app.post('/api/login', async (req, res) => {
 
 // Check auth status
 app.get('/api/auth-status', (req, res) => {
-  if (req.session?.authenticated) {
-    return res.json({
-      authenticated: true,
-      name: req.session.name,
-      allowedReports: req.session.allowedReports || [1]
-    });
+  const token = req.cookies?.auth_token;
+  if (!token) return res.json({ authenticated: false });
+  try {
+    const user = jwt.verify(token, CONFIG.JWT_SECRET);
+    return res.json({ authenticated: true, name: user.name, allowedReports: user.allowedReports });
+  } catch {
+    return res.json({ authenticated: false });
   }
-  return res.json({ authenticated: false });
 });
 
 // Get embed info (protected)
 app.get('/api/embed-info', requireAuth, async (req, res) => {
   try {
     const reportNum = parseInt(req.query.report) || 1;
-    const allowed = req.session.allowedReports || [1];
+    const allowed = req.user.allowedReports || [1];
 
     if (!allowed.includes(reportNum)) {
       return res.status(403).json({ success: false, error: 'Access denied to this dashboard' });
     }
 
     const embedInfo = await getEmbedInfo(reportNum);
-    res.json({ success: true, ...embedInfo, user: req.session.name });
+    res.json({ success: true, ...embedInfo, user: req.user.name });
   } catch (error) {
     console.error('Embed error:', error.response?.data || error.message);
     res.status(500).json({
@@ -182,7 +190,11 @@ app.get('/api/embed-info', requireAuth, async (req, res) => {
 
 // Logout
 app.post('/api/logout', (req, res) => {
-  req.session.destroy();
+  res.clearCookie('auth_token', {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: isProduction ? 'none' : 'lax',
+  });
   res.json({ success: true });
 });
 
