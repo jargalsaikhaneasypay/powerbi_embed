@@ -10,19 +10,29 @@ async function tryAzureSSO() {
   await msalInstance.handleRedirectPromise();
 
   const accounts = msalInstance.getAllAccounts();
-  const silentRequest = {
-    scopes: loginScopes,
-    account: accounts[0] || undefined,
-  };
+  const request = { scopes: loginScopes, account: accounts[0] || undefined };
 
-  try {
-    const result = accounts.length > 0
-      ? await msalInstance.acquireTokenSilent(silentRequest)
-      : await msalInstance.ssoSilent(silentRequest);
-    return result.accessToken;
-  } catch {
-    return null;
+  // 1. Try silent with cached account
+  if (accounts.length > 0) {
+    try {
+      const result = await msalInstance.acquireTokenSilent(request);
+      return result.accessToken;
+    } catch {}
   }
+
+  // 2. Try ssoSilent (uses existing Azure AD session)
+  try {
+    const result = await msalInstance.ssoSilent(request);
+    return result.accessToken;
+  } catch {}
+
+  // 3. Fall back to popup (auto-closes if already logged into Azure AD)
+  try {
+    const result = await msalInstance.loginPopup({ scopes: loginScopes });
+    return result.accessToken;
+  } catch {}
+
+  return null;
 }
 
 export default function App() {
