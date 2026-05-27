@@ -6,9 +6,6 @@ import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 
 async function trySilentSSO() {
-  await msalInstance.initialize();
-  await msalInstance.handleRedirectPromise();
-
   const accounts = msalInstance.getAllAccounts();
   const request = { scopes: loginScopes, account: accounts[0] || undefined };
 
