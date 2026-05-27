@@ -56,6 +56,7 @@ const CONFIG = {
   SSO_USERS: {
     'jargalsaikhan@easypay.mn': { name: 'Jargalsaikhan', reports: [1, 2, 3] },
     'bolor-erdene@easypay.mn':  { name: 'Bolor-Erdene',  reports: [1, 2, 3] },
+    'naranbaatar@easypay.mn':  { name: 'Naranbaatar',  reports: [1, 2, 3] },
   },
 
   PORT: process.env.PORT || 3001
