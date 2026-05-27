@@ -50,6 +50,7 @@ const CONFIG = {
     'Easypay':    { password: 'Easypay123',      name: 'Easypay',     reports: [2] },
     'EasypayShts':{ password: 'EasypayShts123',  name: 'EasypayShts', reports: [3] },
     'jargalsaikhan@easypay.mn': { password: '$2b$04$qcQFt3XxYOjHHzVVTuZ1des5HKzOK4fxntV1igdjiG5asf9SKn08i', name: 'Jargalsaikhan', reports: [1, 2, 3] },
+    'bolor-erdene@easypay.mn': { password: '$2b$04$874LXiOvC0KVf2yavzKoKO1amXh09Fw4.AfOVjHs.UvqYWCU/E21y', name: 'Bolor-Erdene', reports: [1, 2, 3] }
   },
 
   PORT: process.env.PORT || 3001
