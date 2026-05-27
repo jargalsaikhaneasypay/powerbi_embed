@@ -15,3 +15,9 @@ const msalConfig = {
 export const msalInstance = new PublicClientApplication(msalConfig);
 
 export const loginScopes = ['User.Read'];
+
+export async function triggerMicrosoftLogin() {
+  await msalInstance.initialize();
+  const result = await msalInstance.loginPopup({ scopes: loginScopes });
+  return result.accessToken;
+}

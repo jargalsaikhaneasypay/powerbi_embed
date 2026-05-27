@@ -1,18 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { checkAuth, logout as apiLogout, ssoLogin } from './api';
-import { msalInstance, loginScopes } from './msalConfig';
+import { msalInstance, loginScopes, triggerMicrosoftLogin } from './msalConfig';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 
-async function tryAzureSSO() {
+async function trySilentSSO() {
   await msalInstance.initialize();
   await msalInstance.handleRedirectPromise();
 
   const accounts = msalInstance.getAllAccounts();
   const request = { scopes: loginScopes, account: accounts[0] || undefined };
 
-  // 1. Try silent with cached account
   if (accounts.length > 0) {
     try {
       const result = await msalInstance.acquireTokenSilent(request);
@@ -20,15 +19,8 @@ async function tryAzureSSO() {
     } catch {}
   }
 
-  // 2. Try ssoSilent (uses existing Azure AD session)
   try {
     const result = await msalInstance.ssoSilent(request);
-    return result.accessToken;
-  } catch {}
-
-  // 3. Fall back to popup (auto-closes if already logged into Azure AD)
-  try {
-    const result = await msalInstance.loginPopup({ scopes: loginScopes });
     return result.accessToken;
   } catch {}
 
@@ -41,7 +33,7 @@ export default function App() {
 
   useEffect(() => {
     async function initAuth() {
-      // 1. Check existing JWT cookie first
+      // 1. Check existing JWT cookie
       try {
         const data = await checkAuth();
         if (data.authenticated) {
@@ -50,9 +42,9 @@ export default function App() {
         }
       } catch {}
 
-      // 2. Try Azure AD SSO silently
+      // 2. Try Azure AD silent SSO
       try {
-        const accessToken = await tryAzureSSO();
+        const accessToken = await trySilentSSO();
         if (accessToken) {
           const data = await ssoLogin(accessToken);
           if (data.success) {
@@ -63,7 +55,7 @@ export default function App() {
         }
       } catch {}
 
-      // 3. Fall back to login page
+      // 3. Show login page with "Sign in with Microsoft" button
       setAuth({ checked: true, authenticated: false, name: '', allowedReports: [] });
     }
 
@@ -73,6 +65,19 @@ export default function App() {
   const handleLogin = (name, allowedReports) => {
     setAuth({ checked: true, authenticated: true, name, allowedReports: allowedReports || [] });
     navigate('/dashboard');
+  };
+
+  const handleMicrosoftLogin = async () => {
+    try {
+      const accessToken = await triggerMicrosoftLogin();
+      const data = await ssoLogin(accessToken);
+      if (data.success) {
+        setAuth({ checked: true, authenticated: true, name: data.name, allowedReports: data.allowedReports || [] });
+        navigate('/dashboard');
+      }
+    } catch (err) {
+      console.error('Microsoft login failed:', err);
+    }
   };
 
   const handleLogout = async () => {
@@ -109,7 +114,7 @@ export default function App() {
         element={
           auth.authenticated
             ? <Navigate to="/dashboard" replace />
-            : <LoginPage onLogin={handleLogin} />
+            : <LoginPage onLogin={handleLogin} onMicrosoftLogin={handleMicrosoftLogin} />
         }
       />
       <Route
