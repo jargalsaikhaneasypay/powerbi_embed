@@ -1,62 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
-import { checkAuth, logout as apiLogout, ssoLogin } from './api';
-import { msalInstance, loginScopes, triggerMicrosoftLogin } from './msalConfig';
+import { checkAuth, logout as apiLogout } from './api';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
-
-async function trySilentSSO() {
-  const accounts = msalInstance.getAllAccounts();
-  const request = { scopes: loginScopes, account: accounts[0] || undefined };
-
-  if (accounts.length > 0) {
-    try {
-      const result = await msalInstance.acquireTokenSilent(request);
-      return result.accessToken;
-    } catch {}
-  }
-
-  try {
-    const result = await msalInstance.ssoSilent(request);
-    return result.accessToken;
-  } catch {}
-
-  return null;
-}
 
 export default function App() {
   const [auth, setAuth] = useState({ checked: false, authenticated: false, name: '', allowedReports: [] });
   const navigate = useNavigate();
 
   useEffect(() => {
-    async function initAuth() {
-      // 1. Check existing JWT cookie
-      try {
-        const data = await checkAuth();
-        if (data.authenticated) {
-          setAuth({ checked: true, authenticated: true, name: data.name, allowedReports: data.allowedReports || [] });
-          return;
-        }
-      } catch {}
-
-      // 2. Try Azure AD silent SSO
-      try {
-        const accessToken = await trySilentSSO();
-        if (accessToken) {
-          const data = await ssoLogin(accessToken);
-          if (data.success) {
-            setAuth({ checked: true, authenticated: true, name: data.name, allowedReports: data.allowedReports || [] });
-            navigate('/dashboard');
-            return;
-          }
-        }
-      } catch {}
-
-      // 3. Show login page with "Sign in with Microsoft" button
+    checkAuth().then(data => {
+      setAuth({
+        checked: true,
+        authenticated: data.authenticated,
+        name: data.name || '',
+        allowedReports: data.allowedReports || []
+      });
+    }).catch(() => {
       setAuth({ checked: true, authenticated: false, name: '', allowedReports: [] });
-    }
-
-    initAuth();
+    });
   }, []);
 
   const handleLogin = (name, allowedReports) => {
@@ -64,17 +26,25 @@ export default function App() {
     navigate('/dashboard');
   };
 
-  const handleMicrosoftLogin = async () => {
-    try {
-      const accessToken = await triggerMicrosoftLogin();
-      const data = await ssoLogin(accessToken);
-      if (data.success) {
-        setAuth({ checked: true, authenticated: true, name: data.name, allowedReports: data.allowedReports || [] });
-        navigate('/dashboard');
+  const handleMicrosoftLogin = () => {
+    const popup = window.open('/api/auth/microsoft', 'microsoft-sso', 'width=500,height=650,left=400,top=100');
+
+    const onMessage = async (event) => {
+      if (event.data?.type === 'sso_success') {
+        window.removeEventListener('message', onMessage);
+        if (popup && !popup.closed) popup.close();
+        const data = await checkAuth();
+        if (data.authenticated) {
+          setAuth({ checked: true, authenticated: true, name: data.name, allowedReports: data.allowedReports || [] });
+          navigate('/dashboard');
+        }
+      } else if (event.data?.type === 'sso_error') {
+        window.removeEventListener('message', onMessage);
+        if (popup && !popup.closed) popup.close();
       }
-    } catch (err) {
-      console.error('Microsoft login failed:', err);
-    }
+    };
+
+    window.addEventListener('message', onMessage);
   };
 
   const handleLogout = async () => {

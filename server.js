@@ -194,6 +194,56 @@ app.get('/api/embed-info', requireAuth, async (req, res) => {
   }
 });
 
+// Azure AD OAuth — redirect to Microsoft login
+app.get('/api/auth/microsoft', async (req, res) => {
+  try {
+    const redirectUri = `https://powerbi-embed-455h.onrender.com/api/auth/callback`;
+    const authCodeUrl = await msalClient.getAuthCodeUrl({
+      scopes: ['User.Read'],
+      redirectUri,
+    });
+    res.redirect(authCodeUrl);
+  } catch (err) {
+    console.error('Auth URL error:', err.message);
+    res.status(500).send('Authentication error');
+  }
+});
+
+// Azure AD OAuth — callback after Microsoft login
+app.get('/api/auth/callback', async (req, res) => {
+  const redirectUri = `https://powerbi-embed-455h.onrender.com/api/auth/callback`;
+  try {
+    const tokenResponse = await msalClient.acquireTokenByCode({
+      code: req.query.code,
+      scopes: ['User.Read'],
+      redirectUri,
+    });
+
+    const email = (tokenResponse.account.username || '').toLowerCase();
+    const userKey = Object.keys(CONFIG.SSO_USERS).find(k => k.toLowerCase() === email);
+    const user = userKey ? CONFIG.SSO_USERS[userKey] : null;
+
+    if (!user) {
+      return res.send(`<html><body><script>
+        window.opener && window.opener.postMessage({type:'sso_error',error:'Access denied'}, '*');
+        window.close();
+      </script></body></html>`);
+    }
+
+    setAuthCookie(res, { username: userKey, name: user.name, allowedReports: user.reports });
+    res.send(`<html><body><script>
+      window.opener && window.opener.postMessage({type:'sso_success'}, '*');
+      window.close();
+    </script></body></html>`);
+  } catch (err) {
+    console.error('Auth callback error:', err.message);
+    res.send(`<html><body><script>
+      window.opener && window.opener.postMessage({type:'sso_error',error:'Authentication failed'}, '*');
+      window.close();
+    </script></body></html>`);
+  }
+});
+
 // Azure AD SSO Login
 app.post('/api/sso-login', async (req, res) => {
   const { accessToken } = req.body;
