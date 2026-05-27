@@ -189,6 +189,31 @@ app.get('/api/embed-info', requireAuth, async (req, res) => {
   }
 });
 
+// Azure AD SSO Login
+app.post('/api/sso-login', async (req, res) => {
+  const { accessToken } = req.body;
+  if (!accessToken) return res.status(400).json({ success: false, error: 'No token provided' });
+
+  try {
+    const graphRes = await axios.get('https://graph.microsoft.com/v1.0/me', {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    });
+    const email = (graphRes.data.userPrincipalName || graphRes.data.mail || '').toLowerCase();
+    const userKey = Object.keys(CONFIG.USERS).find(k => k.toLowerCase() === email);
+    const user = userKey ? CONFIG.USERS[userKey] : null;
+
+    if (!user) {
+      return res.status(403).json({ success: false, error: 'Access denied. User not authorized.' });
+    }
+
+    setAuthCookie(res, { username: userKey, name: user.name, allowedReports: user.reports });
+    return res.json({ success: true, name: user.name, allowedReports: user.reports });
+  } catch (err) {
+    console.error('SSO login error:', err.response?.data || err.message);
+    return res.status(401).json({ success: false, error: 'Invalid Azure AD token' });
+  }
+});
+
 // Logout
 app.post('/api/logout', (req, res) => {
   res.clearCookie('auth_token', {

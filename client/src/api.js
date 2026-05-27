@@ -31,3 +31,13 @@ export async function logout() {
     credentials: 'include'
   });
 }
+
+export async function ssoLogin(accessToken) {
+  const res = await fetch(`${API_BASE}/sso-login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ accessToken })
+  });
+  return res.json();
+}
