@@ -224,23 +224,14 @@ app.get('/api/auth/callback', async (req, res) => {
     const user = userKey ? CONFIG.SSO_USERS[userKey] : null;
 
     if (!user) {
-      return res.send(`<html><body><script>
-        window.opener && window.opener.postMessage({type:'sso_error',error:'Access denied'}, '*');
-        window.close();
-      </script></body></html>`);
+      return res.redirect('/?sso_failed=1');
     }
 
     setAuthCookie(res, { username: userKey, name: user.name, allowedReports: user.reports });
-    res.send(`<html><body><script>
-      window.opener && window.opener.postMessage({type:'sso_success'}, '*');
-      window.close();
-    </script></body></html>`);
+    res.redirect('/');
   } catch (err) {
     console.error('Auth callback error:', err.message);
-    res.send(`<html><body><script>
-      window.opener && window.opener.postMessage({type:'sso_error',error:'Authentication failed'}, '*');
-      window.close();
-    </script></body></html>`);
+    res.redirect('/?sso_failed=1');
   }
 });
 

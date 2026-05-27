@@ -9,42 +9,40 @@ export default function App() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    checkAuth().then(data => {
-      setAuth({
-        checked: true,
-        authenticated: data.authenticated,
-        name: data.name || '',
-        allowedReports: data.allowedReports || []
-      });
-    }).catch(() => {
+    async function initAuth() {
+      // 1. Check existing JWT cookie
+      try {
+        const data = await checkAuth();
+        if (data.authenticated) {
+          setAuth({ checked: true, authenticated: true, name: data.name, allowedReports: data.allowedReports || [] });
+          return;
+        }
+      } catch {}
+
+      // 2. If SSO failed (redirected back from callback), show login page
+      const ssoFailed = new URLSearchParams(window.location.search).get('sso_failed');
+      if (ssoFailed) {
+        setAuth({ checked: true, authenticated: false, name: '', allowedReports: [] });
+        return;
+      }
+
+      // 3. If inside an iframe (SharePoint), auto-redirect to Microsoft SSO
+      const inIframe = window.self !== window.top;
+      if (inIframe) {
+        window.location.href = '/api/auth/microsoft';
+        return;
+      }
+
+      // 4. Direct web access — show login page
       setAuth({ checked: true, authenticated: false, name: '', allowedReports: [] });
-    });
+    }
+
+    initAuth();
   }, []);
 
   const handleLogin = (name, allowedReports) => {
     setAuth({ checked: true, authenticated: true, name, allowedReports: allowedReports || [] });
     navigate('/dashboard');
-  };
-
-  const handleMicrosoftLogin = () => {
-    const popup = window.open('/api/auth/microsoft', 'microsoft-sso', 'width=500,height=650,left=400,top=100');
-
-    const onMessage = async (event) => {
-      if (event.data?.type === 'sso_success') {
-        window.removeEventListener('message', onMessage);
-        if (popup && !popup.closed) popup.close();
-        const data = await checkAuth();
-        if (data.authenticated) {
-          setAuth({ checked: true, authenticated: true, name: data.name, allowedReports: data.allowedReports || [] });
-          navigate('/dashboard');
-        }
-      } else if (event.data?.type === 'sso_error') {
-        window.removeEventListener('message', onMessage);
-        if (popup && !popup.closed) popup.close();
-      }
-    };
-
-    window.addEventListener('message', onMessage);
   };
 
   const handleLogout = async () => {
@@ -81,7 +79,7 @@ export default function App() {
         element={
           auth.authenticated
             ? <Navigate to="/dashboard" replace />
-            : <LoginPage onLogin={handleLogin} onMicrosoftLogin={handleMicrosoftLogin} />
+            : <LoginPage onLogin={handleLogin} />
         }
       />
       <Route

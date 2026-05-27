@@ -112,12 +112,11 @@ const styles = {
   },
 };
 
-export default function LoginPage({ onLogin, onMicrosoftLogin }) {
+export default function LoginPage({ onLogin }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [msLoading, setMsLoading] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -226,48 +225,6 @@ export default function LoginPage({ onLogin, onMicrosoftLogin }) {
             {loading ? 'Signing in...' : 'Sign In'}
           </button>
         </form>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', margin: '24px 0 8px' }}>
-          <div style={{ flex: 1, height: '1px', background: 'var(--border)' }} />
-          <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>or</span>
-          <div style={{ flex: 1, height: '1px', background: 'var(--border)' }} />
-        </div>
-
-        <button
-          type="button"
-          disabled={msLoading}
-          onClick={async () => {
-            setMsLoading(true);
-            setError('');
-            try {
-              await onMicrosoftLogin();
-            } catch {
-              setError('Microsoft sign-in failed. Please try again.');
-            } finally {
-              setMsLoading(false);
-            }
-          }}
-          style={{
-            width: '100%',
-            padding: '14px',
-            background: '#fff',
-            color: '#333',
-            border: '1px solid var(--border)',
-            borderRadius: '14px',
-            fontSize: '14px',
-            fontWeight: 600,
-            fontFamily: 'Outfit, sans-serif',
-            cursor: msLoading ? 'not-allowed' : 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '10px',
-            opacity: msLoading ? 0.6 : 1,
-          }}
-        >
-          <img src="https://learn.microsoft.com/en-us/entra/identity-platform/media/howto-add-branding-in-apps/ms-symbollockup_mssymbol_19.svg" width="20" height="20" alt="Microsoft" />
-          {msLoading ? 'Signing in...' : 'Sign in with Microsoft'}
-        </button>
       </div>
     </div>
   );
