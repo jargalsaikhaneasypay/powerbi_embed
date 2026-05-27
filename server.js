@@ -44,13 +44,18 @@ const CONFIG = {
   REPORT_ID_3: 'df629503-90e7-4546-8700-2d445e39f673',   // Dashboard 3 (EasypayShts)
   JWT_SECRET: process.env.JWT_SECRET || 'easypay-jwt-secret-2026',
 
+  // Web login users only
   USERS: {
-    'Admin':      { password: 'Easypay321',      name: 'Admin',       reports: [1, 2, 3] },
-    'EasypayAll': { password: 'easypay2026',     name: 'EasypayAll',  reports: [1] },
-    'Easypay':    { password: 'Easypay123',      name: 'Easypay',     reports: [2] },
-    'EasypayShts':{ password: 'EasypayShts123',  name: 'EasypayShts', reports: [3] },
-    'jargalsaikhan@easypay.mn': { password: '$2b$04$qcQFt3XxYOjHHzVVTuZ1des5HKzOK4fxntV1igdjiG5asf9SKn08i', name: 'Jargalsaikhan', reports: [1, 2, 3] },
-    'bolor-erdene@easypay.mn': { password: '$2b$04$874LXiOvC0KVf2yavzKoKO1amXh09Fw4.AfOVjHs.UvqYWCU/E21y', name: 'Bolor-Erdene', reports: [1, 2, 3] }
+    'Admin':      { password: 'Easypay321',     name: 'Admin',       reports: [1, 2, 3] },
+    'EasypayAll': { password: 'easypay2026',    name: 'EasypayAll',  reports: [1] },
+    'Easypay':    { password: 'Easypay123',     name: 'Easypay',     reports: [2] },
+    'EasypayShts':{ password: 'EasypayShts123', name: 'EasypayShts', reports: [3] },
+  },
+
+  // SharePoint SSO users only (company email — no password needed)
+  SSO_USERS: {
+    'jargalsaikhan@easypay.mn': { name: 'Jargalsaikhan', reports: [1, 2, 3] },
+    'bolor-erdene@easypay.mn':  { name: 'Bolor-Erdene',  reports: [1, 2, 3] },
   },
 
   PORT: process.env.PORT || 3001
@@ -199,8 +204,8 @@ app.post('/api/sso-login', async (req, res) => {
       headers: { Authorization: `Bearer ${accessToken}` }
     });
     const email = (graphRes.data.userPrincipalName || graphRes.data.mail || '').toLowerCase();
-    const userKey = Object.keys(CONFIG.USERS).find(k => k.toLowerCase() === email);
-    const user = userKey ? CONFIG.USERS[userKey] : null;
+    const userKey = Object.keys(CONFIG.SSO_USERS).find(k => k.toLowerCase() === email);
+    const user = userKey ? CONFIG.SSO_USERS[userKey] : null;
 
     if (!user) {
       return res.status(403).json({ success: false, error: 'Access denied. User not authorized.' });
