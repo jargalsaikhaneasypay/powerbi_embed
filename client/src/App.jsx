@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
-import { checkAuth, logout as apiLogout } from './api';
+import { checkAuth, logout as apiLogout, ssoLogin } from './api';
+import { tryMicrosoftSilentLogin } from './msalConfig';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 
@@ -17,9 +18,21 @@ export default function App() {
           setAuth({ checked: true, authenticated: true, name: data.name, allowedReports: data.allowedReports || [] });
           return;
         }
-      } catch {}
 
-      // 2. Show login page
+        // 2. Try silent Microsoft SSO if the browser has an existing session
+        const silentToken = await tryMicrosoftSilentLogin();
+        if (silentToken) {
+          const ssoData = await ssoLogin(silentToken);
+          if (ssoData.success) {
+            setAuth({ checked: true, authenticated: true, name: ssoData.name, allowedReports: ssoData.allowedReports || [] });
+            return;
+          }
+        }
+      } catch (error) {
+        console.warn('Auth init error:', error);
+      }
+
+      // 3. Show login page
       setAuth({ checked: true, authenticated: false, name: '', allowedReports: [] });
     }
 

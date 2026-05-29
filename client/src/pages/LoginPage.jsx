@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { login } from '../api';
+import { login, ssoLogin } from '../api';
+import { triggerMicrosoftLogin } from '../msalConfig';
 
 const styles = {
   wrapper: {
@@ -117,6 +118,29 @@ export default function LoginPage({ onLogin }) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [ssoLoading, setSsoLoading] = useState(false);
+
+  const handleMicrosoftLogin = async () => {
+    setError('');
+    setLoading(true);
+    setSsoLoading(true);
+
+    try {
+      const accessToken = await triggerMicrosoftLogin();
+      const data = await ssoLogin(accessToken);
+      if (data.success) {
+        onLogin(data.name, data.allowedReports);
+      } else {
+        setError(data.error || 'Microsoft login failed.');
+      }
+    } catch (err) {
+      console.error('Microsoft login error:', err);
+      setError('Microsoft SSO failed. Please try again or use username/password.');
+    } finally {
+      setLoading(false);
+      setSsoLoading(false);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -206,10 +230,10 @@ export default function LoginPage({ onLogin }) {
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || ssoLoading}
             style={{
               ...styles.button,
-              ...(loading ? styles.buttonDisabled : {})
+              ...(loading || ssoLoading ? styles.buttonDisabled : {})
             }}
             onMouseEnter={(e) => {
               if (!loading) {
@@ -223,6 +247,20 @@ export default function LoginPage({ onLogin }) {
             }}
           >
             {loading ? 'Signing in...' : 'Sign In'}
+          </button>
+
+          <button
+            type="button"
+            disabled={loading || ssoLoading}
+            onClick={handleMicrosoftLogin}
+            style={{
+              ...styles.button,
+              marginTop: '16px',
+              background: 'linear-gradient(135deg, #2f80ed, #1c4dd9)',
+              ...(loading || ssoLoading ? styles.buttonDisabled : {})
+            }}
+          >
+            {ssoLoading ? 'Signing in with Microsoft...' : 'Sign in with Microsoft'}
           </button>
         </form>
       </div>

@@ -20,3 +20,16 @@ export async function triggerMicrosoftLogin() {
   const result = await msalInstance.loginPopup({ scopes: loginScopes });
   return result.accessToken;
 }
+
+export async function tryMicrosoftSilentLogin() {
+  const accounts = msalInstance.getAllAccounts();
+  if (!accounts.length) return null;
+
+  try {
+    const result = await msalInstance.ssoSilent({ scopes: loginScopes, account: accounts[0] });
+    return result.accessToken;
+  } catch (error) {
+    console.warn('MSAL silent login failed:', error.errorCode || error.message || error);
+    return null;
+  }
+}
