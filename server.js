@@ -225,14 +225,42 @@ app.get('/api/auth/callback', async (req, res) => {
     const user = userKey ? CONFIG.SSO_USERS[userKey] : null;
 
     if (!user) {
-      return res.redirect('/?sso_failed=1');
+      return res.send(`<!DOCTYPE html><html><body>
+        <script>
+          if (window.opener) {
+            window.opener.postMessage({ type: 'sso_error', error: 'Access denied' }, '*');
+            window.close();
+          } else { window.location.href = '/'; }
+        </script>
+        <p style="font-family:sans-serif;text-align:center;margin-top:40px">Access denied. You can close this tab.</p>
+      </body></html>`);
     }
 
     setAuthCookie(res, { username: userKey, name: user.name, allowedReports: user.reports });
-    res.redirect('/');
+    res.send(`<!DOCTYPE html><html><body>
+      <script>
+        if (window.opener) {
+          window.opener.postMessage({ type: 'sso_success' }, '*');
+          window.close();
+        } else {
+          window.location.href = '/';
+        }
+      </script>
+      <p style="font-family:sans-serif;text-align:center;margin-top:40px">Authentication complete. You can close this tab.</p>
+    </body></html>`);
   } catch (err) {
     console.error('Auth callback error:', err.message);
-    res.redirect('/?sso_failed=1');
+    res.send(`<!DOCTYPE html><html><body>
+      <script>
+        if (window.opener) {
+          window.opener.postMessage({ type: 'sso_error' }, '*');
+          window.close();
+        } else {
+          window.location.href = '/';
+        }
+      </script>
+      <p style="font-family:sans-serif;text-align:center;margin-top:40px">Authentication failed. You can close this tab.</p>
+    </body></html>`);
   }
 });
 

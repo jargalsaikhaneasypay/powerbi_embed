@@ -112,11 +112,12 @@ const styles = {
   },
 };
 
-export default function LoginPage({ onLogin }) {
+export default function LoginPage({ onLogin, onMicrosoftLogin }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const inSharePoint = window.self !== window.top;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -225,6 +226,36 @@ export default function LoginPage({ onLogin }) {
             {loading ? 'Signing in...' : 'Sign In'}
           </button>
         </form>
+
+        {inSharePoint && (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', margin: '24px 0 8px' }}>
+              <div style={{ flex: 1, height: '1px', background: 'var(--border)' }} />
+              <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>or</span>
+              <div style={{ flex: 1, height: '1px', background: 'var(--border)' }} />
+            </div>
+            <button
+              type="button"
+              onClick={onMicrosoftLogin}
+              style={{
+                width: '100%', padding: '14px',
+                background: '#fff', color: '#333',
+                border: '1px solid var(--border)', borderRadius: '14px',
+                fontSize: '14px', fontWeight: 600,
+                fontFamily: 'Outfit, sans-serif', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
+              }}
+            >
+              <svg width="20" height="20" viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg">
+                <rect x="1" y="1" width="9" height="9" fill="#f25022"/>
+                <rect x="11" y="1" width="9" height="9" fill="#00a4ef"/>
+                <rect x="1" y="11" width="9" height="9" fill="#7fba00"/>
+                <rect x="11" y="11" width="9" height="9" fill="#ffb900"/>
+              </svg>
+              Sign in with Microsoft
+            </button>
+          </>
+        )}
       </div>
     </div>
   );
