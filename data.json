@@ -1,0 +1,15 @@
+{
+  "ssoUsers": {
+    "jargalsaikhan@easypay.mn": { "name": "Jargalsaikhan", "reports": [1, 2, 3] },
+    "bolor-erdene@easypay.mn":  { "name": "Bolor-Erdene",  "reports": [1, 2, 3] },
+    "naranbaatar@easypay.mn":   { "name": "Naranbaatar",   "reports": [1, 2, 3] },
+    "zolzaya@easypay.mn":       { "name": "Zolzaya",       "reports": [2] },
+    "ganbold@easypay.mn":       { "name": "Ganbold",       "reports": [2] }
+  },
+  "dashboards": [
+    { "id": 1, "name": "Dashboard 1", "reportId": "2f3ed948-726c-45f4-9701-f773445e29d4" },
+    { "id": 2, "name": "Dashboard 2", "reportId": "59b65d18-7735-4bcc-a4e6-35ce557aeb43" },
+    { "id": 3, "name": "Dashboard 3", "reportId": "df629503-90e7-4546-8700-2d445e39f673" }
+  ],
+  "nextDashboardId": 4
+}

@@ -3,6 +3,7 @@ import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { checkAuth, logout as apiLogout } from './api';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
+import AdminPage from './pages/AdminPage';
 
 export default function App() {
   const [auth, setAuth] = useState({ checked: false, authenticated: false, name: '', allowedReports: [] });
@@ -10,7 +11,6 @@ export default function App() {
 
   useEffect(() => {
     async function initAuth() {
-      // 1. Check existing JWT cookie
       try {
         const data = await checkAuth();
         if (data.authenticated) {
@@ -18,11 +18,8 @@ export default function App() {
           return;
         }
       } catch {}
-
-      // 2. Show login page
       setAuth({ checked: true, authenticated: false, name: '', allowedReports: [] });
     }
-
     initAuth();
   }, []);
 
@@ -75,6 +72,8 @@ export default function App() {
     );
   }
 
+  const isAdmin = auth.name === 'Admin';
+
   return (
     <Routes>
       <Route
@@ -89,7 +88,20 @@ export default function App() {
         path="/dashboard"
         element={
           auth.authenticated
-            ? <DashboardPage userName={auth.name} allowedReports={auth.allowedReports} onLogout={handleLogout} />
+            ? <DashboardPage
+                userName={auth.name}
+                allowedReports={auth.allowedReports}
+                onLogout={handleLogout}
+                isAdmin={isAdmin}
+              />
+            : <Navigate to="/" replace />
+        }
+      />
+      <Route
+        path="/admin"
+        element={
+          auth.authenticated && isAdmin
+            ? <AdminPage onLogout={handleLogout} />
             : <Navigate to="/" replace />
         }
       />

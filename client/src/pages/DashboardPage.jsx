@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { getEmbedInfo } from '../api';
+import { useNavigate } from 'react-router-dom';
+import { getEmbedInfo, getDashboards } from '../api';
 import * as pbi from 'powerbi-client';
 
 const styles = {
@@ -204,13 +205,15 @@ const styles = {
   },
 };
 
-export default function DashboardPage({ userName, allowedReports, onLogout }) {
+export default function DashboardPage({ userName, allowedReports, onLogout, isAdmin }) {
+  const navigate = useNavigate();
   const firstReport = allowedReports?.[0] || 1;
   const [status, setStatus] = useState('loading');
   const [reportName, setReportName] = useState('Loading...');
   const [errorMsg, setErrorMsg] = useState('');
   const [showTokenNotice, setShowTokenNotice] = useState(false);
   const [activeReport, setActiveReport] = useState(firstReport);
+  const [dashboardNames, setDashboardNames] = useState({});
 
   const activeReportRef = useRef(activeReport);
   const containerRef = useRef(null);
@@ -228,6 +231,16 @@ export default function DashboardPage({ userName, allowedReports, onLogout }) {
       pbi.factories.wpmpFactory,
       pbi.factories.routerFactory
     );
+  }, []);
+
+  useEffect(() => {
+    getDashboards().then(res => {
+      if (res.success) {
+        const names = {};
+        res.dashboards.forEach(d => { names[d.id] = d.name; });
+        setDashboardNames(names);
+      }
+    }).catch(() => {});
   }, []);
 
   const scheduleRefresh = useCallback((expiry) => {
@@ -347,7 +360,7 @@ export default function DashboardPage({ userName, allowedReports, onLogout }) {
                   ...(activeReport === num ? styles.tabActive : {}),
                 }}
               >
-                Dashboard {num}
+                {dashboardNames[num] || `Dashboard ${num}`}
               </button>
             ))}
           </div>
@@ -360,6 +373,26 @@ export default function DashboardPage({ userName, allowedReports, onLogout }) {
             </div>
             <span style={styles.userName}>{userName}</span>
           </div>
+          {isAdmin && (
+            <button
+              onClick={() => navigate('/admin')}
+              style={{
+                ...styles.logoutBtn,
+                borderColor: 'rgba(245, 159, 69, 0.4)',
+                color: '#f59f45',
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.background = 'rgba(245, 159, 69, 0.1)';
+                e.target.style.color = '#f59f45';
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.background = 'transparent';
+                e.target.style.color = '#f59f45';
+              }}
+            >
+              Admin
+            </button>
+          )}
           <button
             onClick={onLogout}
             style={styles.logoutBtn}
