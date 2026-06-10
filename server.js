@@ -432,7 +432,7 @@ initDB()
   .then(() => {
     app.listen(CONFIG.PORT, '0.0.0.0', () => {
       console.log(`\n✅ Server running at http://localhost:${CONFIG.PORT}`);
-      console.log(`   Database: ${process.env.DATABASE_URL ? '✅ Supabase connected' : '❌ DATABASE_URL not set'}`);
+      console.log(`   Database: ${process.env.DB_PASSWORD ? '✅ Supabase connected' : '⚠️  DB_PASSWORD not set'}`);
     });
   })
   .catch(err => {
