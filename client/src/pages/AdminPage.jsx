@@ -22,6 +22,11 @@ const S = {
   },
   navTitle: { fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.2px' },
   navSubtitle: { fontSize: '12px', color: 'var(--text-muted)', fontWeight: 300, marginTop: '1px' },
+  exportBtn: {
+    padding: '8px 18px', background: 'rgba(79,125,245,0.1)', border: '1px solid rgba(79,125,245,0.3)',
+    color: 'var(--accent)', borderRadius: '8px', fontSize: '13px',
+    fontFamily: 'Outfit, sans-serif', cursor: 'pointer', transition: 'all 0.2s', fontWeight: 500,
+  },
   backBtn: {
     padding: '8px 18px', background: 'transparent', border: '1px solid var(--border)',
     color: 'var(--text-muted)', borderRadius: '8px', fontSize: '13px',
@@ -151,6 +156,23 @@ export default function AdminPage({ onLogout }) {
     setTimeout(() => setToast(t => ({ ...t, visible: false })), 3000);
   }
 
+  function handleExport() {
+    if (!data) return;
+    const exportData = {
+      ssoUsers: data.ssoUsers,
+      dashboards: data.dashboards,
+      nextDashboardId: data.nextDashboardId
+    };
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'data.json';
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('data.json downloaded — replace the file in your project and push to GitHub');
+  }
+
   async function reload() {
     try {
       const res = await getAdminData();
@@ -275,6 +297,15 @@ export default function AdminPage({ onLogout }) {
         </div>
         <div style={{ display: 'flex', gap: '10px' }}>
           <button
+            style={S.exportBtn}
+            onClick={handleExport}
+            disabled={!data}
+            onMouseEnter={e => { e.target.style.background = 'rgba(79,125,245,0.2)'; }}
+            onMouseLeave={e => { e.target.style.background = 'rgba(79,125,245,0.1)'; }}
+          >
+            Export data.json
+          </button>
+          <button
             style={S.backBtn}
             onClick={() => navigate('/dashboard')}
             onMouseEnter={e => { e.target.style.background = 'var(--bg-elevated)'; e.target.style.color = 'var(--text-secondary)'; }}
@@ -300,6 +331,21 @@ export default function AdminPage({ onLogout }) {
           </div>
         ) : (
           <>
+            <div style={{
+              background: 'rgba(245, 159, 69, 0.08)',
+              border: '1px solid rgba(245, 159, 69, 0.25)',
+              borderRadius: '12px',
+              padding: '12px 16px',
+              marginBottom: '20px',
+              fontSize: '13px',
+              color: '#f59f45',
+              lineHeight: 1.6,
+            }}>
+              <strong>Important:</strong> Changes made here are lost when the server restarts.
+              After making changes, click <strong>Export data.json</strong> above, replace the
+              file in your project folder, then push to GitHub to make them permanent.
+            </div>
+
             <div style={S.tabs}>
               <button style={{ ...S.tab, ...(tab === 'sso' ? S.tabActive : {}) }} onClick={() => setTab('sso')}>
                 SSO Users ({ssoUsers.length})
