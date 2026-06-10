@@ -2,11 +2,11 @@ const express = require('express');
 const axios = require('axios');
 const msal = require('@azure/msal-node');
 const path = require('path');
-const fs = require('fs');
 const cors = require('cors');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
+const { Pool } = require('pg');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -53,39 +53,58 @@ const CONFIG = {
 };
 
 // =============================================
-// Dynamic Data — SSO Users + Dashboards
-// Loaded from data.json; written back on changes.
-// On Render: persists between restarts but resets
-// to the committed data.json on each new deploy.
+// PostgreSQL — Supabase
 // =============================================
-const DATA_FILE = path.join(__dirname, 'data.json');
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false }
+});
 
-const DEFAULT_DATA = {
-  ssoUsers: {},
-  dashboards: [],
-  nextDashboardId: 1
-};
+async function initDB() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS dashboards (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      report_id TEXT NOT NULL
+    )
+  `);
 
-function loadData() {
-  try {
-    if (fs.existsSync(DATA_FILE)) {
-      return JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
-    }
-  } catch (e) {
-    console.error('Failed to load data.json, using empty defaults:', e.message);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS sso_users (
+      email TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      reports INTEGER[] NOT NULL DEFAULT '{}'
+    )
+  `);
+
+  // Seed dashboards if empty
+  const { rows: dbRows } = await pool.query('SELECT COUNT(*) FROM dashboards');
+  if (parseInt(dbRows[0].count) === 0) {
+    await pool.query(`
+      INSERT INTO dashboards (name, report_id) VALUES
+      ('Dashboard 1', '2f3ed948-726c-45f4-9701-f773445e29d4'),
+      ('Dashboard 2', '59b65d18-7735-4bcc-a4e6-35ce557aeb43'),
+      ('Dashboard 3', 'df629503-90e7-4546-8700-2d445e39f673')
+    `);
+    console.log('✅ Seeded initial dashboards');
   }
-  return JSON.parse(JSON.stringify(DEFAULT_DATA));
-}
 
-function saveData() {
-  try {
-    fs.writeFileSync(DATA_FILE, JSON.stringify(dynamicData, null, 2), 'utf8');
-  } catch (e) {
-    console.error('Failed to save data.json:', e.message);
+  // Seed SSO users if empty
+  const { rows: userRows } = await pool.query('SELECT COUNT(*) FROM sso_users');
+  if (parseInt(userRows[0].count) === 0) {
+    await pool.query(`
+      INSERT INTO sso_users (email, name, reports) VALUES
+      ('jargalsaikhan@easypay.mn', 'Jargalsaikhan', '{1,2,3}'),
+      ('bolor-erdene@easypay.mn',  'Bolor-Erdene',  '{1,2,3}'),
+      ('naranbaatar@easypay.mn',   'Naranbaatar',   '{1,2,3}'),
+      ('zolzaya@easypay.mn',       'Zolzaya',       '{2}'),
+      ('ganbold@easypay.mn',       'Ganbold',       '{2}')
+    `);
+    console.log('✅ Seeded initial SSO users');
   }
-}
 
-let dynamicData = loadData();
+  console.log('✅ Database ready');
+}
 
 // =============================================
 // MSAL Setup
@@ -102,18 +121,17 @@ const msalClient = new msal.ConfidentialClientApplication({
 // Get Embed Token
 // =============================================
 async function getEmbedInfo(reportNum) {
-  const dashboard = dynamicData.dashboards.find(d => d.id === reportNum);
-  if (!dashboard) throw new Error(`Dashboard ${reportNum} not found`);
-  const reportId = dashboard.reportId;
+  const { rows } = await pool.query('SELECT * FROM dashboards WHERE id = $1', [reportNum]);
+  if (!rows.length) throw new Error(`Dashboard ${reportNum} not found`);
+  const reportId = rows[0].report_id;
 
   const authResult = await msalClient.acquireTokenByClientCredential({
     scopes: ['https://analysis.windows.net/powerbi/api/.default']
   });
 
   if (!authResult?.accessToken) {
-    throw new Error('MSAL returned no access token — check CLIENT_ID, TENANT_ID, CLIENT_SECRET');
+    throw new Error('MSAL returned no access token');
   }
-  console.log('✅ MSAL token acquired, expires:', authResult.expiresOn);
 
   const headers = { Authorization: `Bearer ${authResult.accessToken}` };
 
@@ -121,8 +139,7 @@ async function getEmbedInfo(reportNum) {
     `https://api.powerbi.com/v1.0/myorg/groups/${CONFIG.WORKSPACE_ID}/reports/${reportId}`,
     { headers }
   ).catch(err => {
-    const detail = err.response?.data;
-    console.error('❌ GET report failed:', JSON.stringify(detail, null, 2));
+    console.error('❌ GET report failed:', JSON.stringify(err.response?.data, null, 2));
     throw err;
   });
 
@@ -131,8 +148,7 @@ async function getEmbedInfo(reportNum) {
     { accessLevel: 'View', allowSaveAs: false },
     { headers }
   ).catch(err => {
-    const detail = err.response?.data;
-    console.error('❌ GenerateToken failed:', JSON.stringify(detail, null, 2));
+    console.error('❌ GenerateToken failed:', JSON.stringify(err.response?.data, null, 2));
     throw err;
   });
 
@@ -196,10 +212,13 @@ app.post('/api/login', async (req, res) => {
   const valid = isHashed ? await bcrypt.compare(password, user.password) : password === user.password;
 
   if (valid) {
-    // Admin always gets access to all current dashboards
-    const reports = user.reports === 'all'
-      ? dynamicData.dashboards.map(d => d.id)
-      : user.reports;
+    let reports;
+    if (user.reports === 'all') {
+      const { rows } = await pool.query('SELECT id FROM dashboards ORDER BY id');
+      reports = rows.map(r => r.id);
+    } else {
+      reports = user.reports;
+    }
     setAuthCookie(res, { username, name: user.name, allowedReports: reports });
     return res.json({ success: true, name: user.name, allowedReports: reports });
   }
@@ -218,13 +237,15 @@ app.get('/api/auth-status', (req, res) => {
   }
 });
 
-// Get dashboards list for authenticated user (id + name only, no reportId)
-app.get('/api/dashboards', requireAuth, (req, res) => {
+// Get dashboards list for authenticated user
+app.get('/api/dashboards', requireAuth, async (req, res) => {
   const allowed = req.user.allowedReports || [];
-  const dashboards = dynamicData.dashboards
-    .filter(d => allowed.includes(d.id))
-    .map(d => ({ id: d.id, name: d.name }));
-  res.json({ success: true, dashboards });
+  if (!allowed.length) return res.json({ success: true, dashboards: [] });
+  const { rows } = await pool.query(
+    'SELECT id, name FROM dashboards WHERE id = ANY($1) ORDER BY id',
+    [allowed]
+  );
+  res.json({ success: true, dashboards: rows });
 });
 
 // Get embed info (protected)
@@ -249,67 +270,65 @@ app.get('/api/embed-info', requireAuth, async (req, res) => {
 });
 
 // =============================================
-// Admin API Routes (Admin user only)
+// Admin API Routes
 // =============================================
 
-// Get all dynamic data
-app.get('/api/admin/data', requireAdmin, (req, res) => {
-  res.json({ success: true, ...dynamicData });
+// Get all data
+app.get('/api/admin/data', requireAdmin, async (req, res) => {
+  const [usersRes, dashboardsRes] = await Promise.all([
+    pool.query('SELECT * FROM sso_users ORDER BY email'),
+    pool.query('SELECT * FROM dashboards ORDER BY id')
+  ]);
+
+  const ssoUsers = {};
+  usersRes.rows.forEach(r => { ssoUsers[r.email] = { name: r.name, reports: r.reports }; });
+  const dashboards = dashboardsRes.rows.map(r => ({ id: r.id, name: r.name, reportId: r.report_id }));
+
+  res.json({ success: true, ssoUsers, dashboards });
 });
 
 // Add or update SSO user
-app.post('/api/admin/sso-users', requireAdmin, (req, res) => {
+app.post('/api/admin/sso-users', requireAdmin, async (req, res) => {
   const { email, name, reports } = req.body;
   if (!email || !name || !Array.isArray(reports)) {
     return res.status(400).json({ success: false, error: 'email, name, and reports[] are required' });
   }
-  const key = email.toLowerCase().trim();
-  dynamicData.ssoUsers[key] = { name: name.trim(), reports };
-  saveData();
+  await pool.query(
+    `INSERT INTO sso_users (email, name, reports) VALUES ($1, $2, $3)
+     ON CONFLICT (email) DO UPDATE SET name = $2, reports = $3`,
+    [email.toLowerCase().trim(), name.trim(), reports]
+  );
   res.json({ success: true });
 });
 
 // Delete SSO user
-app.delete('/api/admin/sso-users/:email', requireAdmin, (req, res) => {
-  const key = decodeURIComponent(req.params.email).toLowerCase();
-  if (!dynamicData.ssoUsers[key]) {
-    return res.status(404).json({ success: false, error: 'User not found' });
-  }
-  delete dynamicData.ssoUsers[key];
-  saveData();
+app.delete('/api/admin/sso-users/:email', requireAdmin, async (req, res) => {
+  const email = decodeURIComponent(req.params.email).toLowerCase();
+  const { rowCount } = await pool.query('DELETE FROM sso_users WHERE email = $1', [email]);
+  if (!rowCount) return res.status(404).json({ success: false, error: 'User not found' });
   res.json({ success: true });
 });
 
 // Add dashboard
-app.post('/api/admin/dashboards', requireAdmin, (req, res) => {
+app.post('/api/admin/dashboards', requireAdmin, async (req, res) => {
   const { name, reportId } = req.body;
   if (!name || !reportId) {
     return res.status(400).json({ success: false, error: 'name and reportId are required' });
   }
-  const newDashboard = {
-    id: dynamicData.nextDashboardId,
-    name: name.trim(),
-    reportId: reportId.trim()
-  };
-  dynamicData.nextDashboardId += 1;
-  dynamicData.dashboards.push(newDashboard);
-  saveData();
-  res.json({ success: true, dashboard: newDashboard });
+  const { rows } = await pool.query(
+    'INSERT INTO dashboards (name, report_id) VALUES ($1, $2) RETURNING *',
+    [name.trim(), reportId.trim()]
+  );
+  res.json({ success: true, dashboard: { id: rows[0].id, name: rows[0].name, reportId: rows[0].report_id } });
 });
 
 // Delete dashboard
-app.delete('/api/admin/dashboards/:id', requireAdmin, (req, res) => {
+app.delete('/api/admin/dashboards/:id', requireAdmin, async (req, res) => {
   const id = parseInt(req.params.id);
-  const idx = dynamicData.dashboards.findIndex(d => d.id === id);
-  if (idx === -1) {
-    return res.status(404).json({ success: false, error: 'Dashboard not found' });
-  }
-  dynamicData.dashboards.splice(idx, 1);
-  // Remove this dashboard from all SSO users' report lists
-  for (const key of Object.keys(dynamicData.ssoUsers)) {
-    dynamicData.ssoUsers[key].reports = dynamicData.ssoUsers[key].reports.filter(r => r !== id);
-  }
-  saveData();
+  const { rowCount } = await pool.query('DELETE FROM dashboards WHERE id = $1', [id]);
+  if (!rowCount) return res.status(404).json({ success: false, error: 'Dashboard not found' });
+  // Remove from all SSO users' report lists
+  await pool.query('UPDATE sso_users SET reports = array_remove(reports, $1)', [id]);
   res.json({ success: true });
 });
 
@@ -317,14 +336,10 @@ app.delete('/api/admin/dashboards/:id', requireAdmin, (req, res) => {
 // Azure AD SSO Routes
 // =============================================
 
-// Redirect to Microsoft login
 app.get('/api/auth/microsoft', async (req, res) => {
   try {
     const redirectUri = `https://powerbi-embed-455h.onrender.com/api/auth/callback`;
-    const authCodeUrl = await msalClient.getAuthCodeUrl({
-      scopes: ['User.Read'],
-      redirectUri,
-    });
+    const authCodeUrl = await msalClient.getAuthCodeUrl({ scopes: ['User.Read'], redirectUri });
     res.redirect(authCodeUrl);
   } catch (err) {
     console.error('Auth URL error:', err.message);
@@ -332,7 +347,6 @@ app.get('/api/auth/microsoft', async (req, res) => {
   }
 });
 
-// OAuth callback after Microsoft login
 app.get('/api/auth/callback', async (req, res) => {
   const redirectUri = `https://powerbi-embed-455h.onrender.com/api/auth/callback`;
   try {
@@ -343,8 +357,8 @@ app.get('/api/auth/callback', async (req, res) => {
     });
 
     const email = (tokenResponse.account.username || '').toLowerCase();
-    const userKey = Object.keys(dynamicData.ssoUsers).find(k => k.toLowerCase() === email);
-    const user = userKey ? dynamicData.ssoUsers[userKey] : null;
+    const { rows } = await pool.query('SELECT * FROM sso_users WHERE email = $1', [email]);
+    const user = rows[0];
 
     if (!user) {
       return res.send(`<html><body><script>
@@ -353,7 +367,7 @@ app.get('/api/auth/callback', async (req, res) => {
       </script></body></html>`);
     }
 
-    setAuthCookie(res, { username: userKey, name: user.name, allowedReports: user.reports });
+    setAuthCookie(res, { username: email, name: user.name, allowedReports: user.reports });
     res.send(`<html><body><script>
       if (window.opener) { window.opener.postMessage({ type: 'sso_success' }, '*'); }
       window.close();
@@ -367,7 +381,6 @@ app.get('/api/auth/callback', async (req, res) => {
   }
 });
 
-// SSO login via access token (fallback)
 app.post('/api/sso-login', async (req, res) => {
   const { accessToken } = req.body;
   if (!accessToken) return res.status(400).json({ success: false, error: 'No token provided' });
@@ -377,14 +390,14 @@ app.post('/api/sso-login', async (req, res) => {
       headers: { Authorization: `Bearer ${accessToken}` }
     });
     const email = (graphRes.data.userPrincipalName || graphRes.data.mail || '').toLowerCase();
-    const userKey = Object.keys(dynamicData.ssoUsers).find(k => k.toLowerCase() === email);
-    const user = userKey ? dynamicData.ssoUsers[userKey] : null;
+    const { rows } = await pool.query('SELECT * FROM sso_users WHERE email = $1', [email]);
+    const user = rows[0];
 
     if (!user) {
       return res.status(403).json({ success: false, error: 'Access denied. User not authorized.' });
     }
 
-    setAuthCookie(res, { username: userKey, name: user.name, allowedReports: user.reports });
+    setAuthCookie(res, { username: email, name: user.name, allowedReports: user.reports });
     return res.json({ success: true, name: user.name, allowedReports: user.reports });
   } catch (err) {
     console.error('SSO login error:', err.response?.data || err.message);
@@ -402,7 +415,7 @@ app.post('/api/logout', (req, res) => {
   res.json({ success: true });
 });
 
-// In production, serve React build
+// Serve React build
 app.use(express.static(path.join(__dirname, 'client', 'dist')));
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'client', 'dist', 'index.html'));
@@ -411,13 +424,14 @@ app.get('*', (req, res) => {
 // =============================================
 // Start
 // =============================================
-app.listen(CONFIG.PORT, '0.0.0.0', () => {
-  console.log(`\n✅ API server running at http://localhost:${CONFIG.PORT}`);
-  console.log(`\n📋 Config:`);
-  console.log(`   Client ID:    ${CONFIG.CLIENT_ID}`);
-  console.log(`   Tenant ID:    ${CONFIG.TENANT_ID}`);
-  console.log(`   Workspace:    ${CONFIG.WORKSPACE_ID}`);
-  console.log(`   Dashboards:   ${dynamicData.dashboards.length}`);
-  console.log(`   SSO Users:    ${Object.keys(dynamicData.ssoUsers).length}`);
-  console.log('');
-});
+initDB()
+  .then(() => {
+    app.listen(CONFIG.PORT, '0.0.0.0', () => {
+      console.log(`\n✅ Server running at http://localhost:${CONFIG.PORT}`);
+      console.log(`   Database: ${process.env.DATABASE_URL ? '✅ Supabase connected' : '❌ DATABASE_URL not set'}`);
+    });
+  })
+  .catch(err => {
+    console.error('❌ Failed to initialize database:', err.message);
+    process.exit(1);
+  });
