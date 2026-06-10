@@ -56,7 +56,11 @@ const CONFIG = {
 // PostgreSQL — Supabase
 // =============================================
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  host: 'aws-1-ap-northeast-2.pooler.supabase.com',
+  port: 6543,
+  user: 'postgres.lbtxnukgarzuqoysclhf',
+  password: process.env.DB_PASSWORD,
+  database: 'postgres',
   ssl: { rejectUnauthorized: false }
 });
 
@@ -432,6 +436,6 @@ initDB()
     });
   })
   .catch(err => {
-    console.error('❌ Failed to initialize database:', err.message);
+    console.error('❌ Failed to initialize database:', err.message || err.code || JSON.stringify(err));
     process.exit(1);
   });
