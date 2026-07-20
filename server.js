@@ -55,12 +55,13 @@ const CONFIG = {
 // =============================================
 // PostgreSQL — Supabase
 // =============================================
+if (!process.env.DB_PASSWORD) {
+  console.error('❌ DB_PASSWORD environment variable is not set');
+  process.exit(1);
+}
+
 const pool = new Pool({
-  host: 'aws-1-ap-northeast-2.pooler.supabase.com',
-  port: 6543,
-  user: 'postgres.lbtxnukgarzuqoysclhf',
-  password: process.env.DB_PASSWORD,
-  database: 'postgres',
+  connectionString: `postgresql://postgres.lbtxnukgarzuqoysclhf:${encodeURIComponent(process.env.DB_PASSWORD)}@aws-1-ap-northeast-2.pooler.supabase.com:6543/postgres`,
   ssl: { rejectUnauthorized: false }
 });
 
@@ -88,7 +89,8 @@ async function initDB() {
       INSERT INTO dashboards (name, report_id) VALUES
       ('Dashboard 1', '2f3ed948-726c-45f4-9701-f773445e29d4'),
       ('Dashboard 2', '59b65d18-7735-4bcc-a4e6-35ce557aeb43'),
-      ('Dashboard 3', 'df629503-90e7-4546-8700-2d445e39f673')
+      ('Dashboard 3', 'df629503-90e7-4546-8700-2d445e39f673'),
+      ('Dashboard 4', '61a6e8ff-f8ba-4bb7-8b8b-25a520b60f4b')
     `);
     console.log('✅ Seeded initial dashboards');
   }
