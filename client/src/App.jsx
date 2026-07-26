@@ -33,6 +33,9 @@ export default function App() {
     const onMessage = async (event) => {
       if (event.data?.type === 'sso_success') {
         window.removeEventListener('message', onMessage);
+        if (event.data.token) {
+          localStorage.setItem('auth_token', event.data.token);
+        }
         const data = await checkAuth();
         if (data.authenticated) {
           setAuth({ checked: true, authenticated: true, name: data.name, allowedReports: data.allowedReports || [] });

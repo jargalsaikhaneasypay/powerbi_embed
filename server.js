@@ -170,7 +170,7 @@ async function getEmbedInfo(reportNum) {
 // Auth Middleware
 // =============================================
 function requireAuth(req, res, next) {
-  const token = req.cookies?.auth_token;
+  const token = getTokenFromRequest(req);
   if (!token) return res.status(401).json({ error: 'Not authenticated' });
   try {
     req.user = jwt.verify(token, CONFIG.JWT_SECRET);
@@ -181,7 +181,7 @@ function requireAuth(req, res, next) {
 }
 
 function requireAdmin(req, res, next) {
-  const token = req.cookies?.auth_token;
+  const token = getTokenFromRequest(req);
   if (!token) return res.status(401).json({ error: 'Not authenticated' });
   try {
     const user = jwt.verify(token, CONFIG.JWT_SECRET);
@@ -201,6 +201,14 @@ function setAuthCookie(res, payload) {
     sameSite: isProduction ? 'none' : 'lax',
     maxAge: 8 * 60 * 60 * 1000
   });
+  return token;
+}
+
+function getTokenFromRequest(req) {
+  if (req.cookies?.auth_token) return req.cookies.auth_token;
+  const authHeader = req.headers.authorization;
+  if (authHeader?.startsWith('Bearer ')) return authHeader.slice(7);
+  return null;
 }
 
 // =============================================
@@ -222,14 +230,14 @@ app.post('/api/login', async (req, res) => {
     } else {
       reports = user.reports;
     }
-    setAuthCookie(res, { username, name: user.name, allowedReports: reports });
-    return res.json({ success: true, name: user.name, allowedReports: reports });
+    const token = setAuthCookie(res, { username, name: user.name, allowedReports: reports });
+    return res.json({ success: true, name: user.name, allowedReports: reports, token });
   }
   return res.status(401).json({ success: false, error: 'Invalid credentials' });
 });
 
 app.get('/api/auth-status', (req, res) => {
-  const token = req.cookies?.auth_token;
+  const token = getTokenFromRequest(req);
   if (!token) return res.json({ authenticated: false });
   try {
     const user = jwt.verify(token, CONFIG.JWT_SECRET);
@@ -355,9 +363,9 @@ app.get('/api/auth/callback', async (req, res) => {
       </script></body></html>`);
     }
 
-    setAuthCookie(res, { username: email, name: row.name, allowedReports: parseReports(row.reports) });
+    const token = setAuthCookie(res, { username: email, name: row.name, allowedReports: parseReports(row.reports) });
     res.send(`<html><body><script>
-      if (window.opener) { window.opener.postMessage({ type: 'sso_success' }, '*'); }
+      if (window.opener) { window.opener.postMessage({ type: 'sso_success', token: '${token}' }, '*'); }
       window.close();
     </script></body></html>`);
   } catch (err) {
@@ -385,8 +393,8 @@ app.post('/api/sso-login', async (req, res) => {
     }
 
     const reports = parseReports(row.reports);
-    setAuthCookie(res, { username: email, name: row.name, allowedReports: reports });
-    return res.json({ success: true, name: row.name, allowedReports: reports });
+    const token = setAuthCookie(res, { username: email, name: row.name, allowedReports: reports });
+    return res.json({ success: true, name: row.name, allowedReports: reports, token });
   } catch (err) {
     console.error('SSO login error:', err.response?.data || err.message);
     return res.status(401).json({ success: false, error: 'Invalid Azure AD token' });
