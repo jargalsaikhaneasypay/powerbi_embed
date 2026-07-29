@@ -1,0 +1,17 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: powerbi-embed
+  namespace: default
+spec:
+  rules:
+    - host: dashboard.easypay.mn
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: powerbi-embed
+                port:
+                  number: 80
