@@ -4,6 +4,7 @@ import { checkAuth, logout as apiLogout } from './api';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import AdminPage from './pages/AdminPage';
+import OraclePage from './pages/OraclePage';
 
 export default function App() {
   const [auth, setAuth] = useState({ checked: false, authenticated: false, name: '', allowedReports: [] });
@@ -105,6 +106,14 @@ export default function App() {
         element={
           auth.authenticated && isAdmin
             ? <AdminPage onLogout={handleLogout} />
+            : <Navigate to="/" replace />
+        }
+      />
+      <Route
+        path="/oracle"
+        element={
+          auth.authenticated && isAdmin
+            ? <OraclePage onBack={() => window.history.back()} />
             : <Navigate to="/" replace />
         }
       />

@@ -131,7 +131,7 @@ export default function AdminPage({ onLogout }) {
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
 
-  // SSO form state
+  // SSO form stat,e
   const [ssoEmail, setSsoEmail] = useState('');
   const [ssoName, setSsoName] = useState('');
   const [ssoReports, setSsoReports] = useState([]);
@@ -274,6 +274,14 @@ export default function AdminPage({ onLogout }) {
           </div>
         </div>
         <div style={{ display: 'flex', gap: '10px' }}>
+          <button
+            style={{ ...S.backBtn, borderColor: '#0078d4', color: '#0078d4' }}
+            onClick={() => navigate('/oracle')}
+            onMouseEnter={e => { e.target.style.background = '#0078d422'; }}
+            onMouseLeave={e => { e.target.style.background = 'transparent'; }}
+          >
+            🗄️ Oracle DB
+          </button>
           <button
             style={S.backBtn}
             onClick={() => navigate('/dashboard')}
