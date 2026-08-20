@@ -109,16 +109,6 @@ export async function addDashboard(name, reportId) {
   return res.json();
 }
 
-export async function runOracleQuery(host, user, password, query) {
-  const res = await fetch(`${API_BASE}/oracle-query`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-    credentials: 'include',
-    body: JSON.stringify({ host, user, password, query })
-  });
-  return res.json();
-}
-
 export async function deleteDashboard(id) {
   const res = await fetch(`${API_BASE}/admin/dashboards/${id}`, {
     method: 'DELETE',

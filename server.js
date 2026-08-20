@@ -8,7 +8,6 @@ const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
 const Database = require('better-sqlite3');
 const fs = require('fs');
-const oracledb = require('oracledb');
 
 // =============================================
 // SQLite Setup
@@ -409,55 +408,6 @@ app.post('/api/logout', (req, res) => {
     sameSite: isProduction ? 'none' : 'lax',
   });
   res.json({ success: true });
-});
-
-// =============================================
-// Oracle Query Endpoint (Admin only)
-// =============================================
-
-app.post('/api/oracle-query', requireAdmin, async (req, res) => {
-  const { host, user, password, query } = req.body;
-  if (!host || !user || !password || !query) {
-    return res.status(400).json({ success: false, error: 'host, user, password, query are required' });
-  }
-
-  let connection;
-  try {
-    connection = await oracledb.getConnection({
-      user: user.trim(),
-      password: password.trim(),
-      connectString: host.trim()
-    });
-
-    const result = await connection.execute(query.trim(), [], {
-      outFormat: oracledb.OUT_FORMAT_OBJECT,
-      fetchArraySize: 1000,
-      maxRows: 5000
-    });
-
-    const columns = result.metaData ? result.metaData.map(m => m.name) : [];
-    const rows = (result.rows || []).map(row => {
-      const obj = {};
-      for (const col of columns) {
-        const val = row[col];
-        if (val instanceof Date) {
-          obj[col] = val.toISOString().slice(0, 10);
-        } else {
-          obj[col] = val;
-        }
-      }
-      return obj;
-    });
-
-    res.json({ success: true, columns, rows, rowCount: rows.length });
-  } catch (err) {
-    console.error('Oracle query error:', err.message);
-    res.status(500).json({ success: false, error: err.message });
-  } finally {
-    if (connection) {
-      try { await connection.close(); } catch {}
-    }
-  }
 });
 
 // Serve React build

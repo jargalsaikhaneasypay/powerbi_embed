@@ -275,14 +275,6 @@ export default function AdminPage({ onLogout }) {
         </div>
         <div style={{ display: 'flex', gap: '10px' }}>
           <button
-            style={{ ...S.backBtn, borderColor: '#0078d4', color: '#0078d4' }}
-            onClick={() => navigate('/oracle')}
-            onMouseEnter={e => { e.target.style.background = '#0078d422'; }}
-            onMouseLeave={e => { e.target.style.background = 'transparent'; }}
-          >
-            🗄️ Oracle DB
-          </button>
-          <button
             style={S.backBtn}
             onClick={() => navigate('/dashboard')}
             onMouseEnter={e => { e.target.style.background = 'var(--bg-elevated)'; e.target.style.color = 'var(--text-secondary)'; }}
