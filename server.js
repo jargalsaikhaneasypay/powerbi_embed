@@ -83,6 +83,7 @@ const ALLOWED_ORIGINS = [
   /^https:\/\/.*\.onrender\.com$/,
   /^https:\/\/.*\.trycloudflare\.com$/,
   /^https:\/\/.*\.cloudflareaccess\.com$/,
+  /^https?:\/\/.*\.easypay\.mn$/,
 ];
 
 app.use(cors({
@@ -408,6 +409,26 @@ app.post('/api/logout', (req, res) => {
     sameSite: isProduction ? 'none' : 'lax',
   });
   res.json({ success: true });
+});
+
+// =============================================
+// APEX Embed Endpoint (API key auth)
+// =============================================
+const APEX_API_KEY = process.env.APEX_API_KEY || 'easypay-apex-2026';
+
+app.get('/api/apex-embed', async (req, res) => {
+  const { apiKey, report } = req.query;
+  if (apiKey !== APEX_API_KEY) {
+    return res.status(401).json({ success: false, error: 'Invalid API key' });
+  }
+  try {
+    const reportNum = parseInt(report) || 1;
+    const embedInfo = await getEmbedInfo(reportNum);
+    res.json({ success: true, ...embedInfo });
+  } catch (error) {
+    console.error('APEX embed error:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
 });
 
 // Serve React build
